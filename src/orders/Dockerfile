@@ -1,7 +1,14 @@
-FROM golang:1.24
-WORKDIR /app
-COPY . .
+# ---------- Etapa 1: compilación ----------
+FROM golang:1.24-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -o orders .
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/orders .
+
+# ---------- Etapa 2: ejecución (imagen mínima, sin root) ----------
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/orders /orders
+USER nonroot:nonroot
 EXPOSE 8080
-CMD ["./orders"]
+ENTRYPOINT ["/orders"]
