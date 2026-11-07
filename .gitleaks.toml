@@ -1,0 +1,13 @@
+# Configuración de Gitleaks para Tero.
+# Usa todas las reglas por defecto y agrega excepciones justificadas.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Excepciones justificadas (ver docs de seguridad)"
+paths = [
+  # Binario de Yarn versionado en el repo (checkout). Incluye una API key
+  # pública de solo lectura de Algolia, propia de Yarn: no es un secreto de Tero.
+  '''\.yarn/releases/''',
+]
