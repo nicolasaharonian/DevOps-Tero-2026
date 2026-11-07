@@ -42,7 +42,7 @@ jobs:
           tags: tero/${{ matrix.service }}:pr-${{ github.event.pull_request.number || 'manual' }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-          
+
   gitleaks:
     name: Secretos (Gitleaks)
     runs-on: ubuntu-latest
@@ -54,5 +54,5 @@ jobs:
     - name: Buscar secretos con Gitleaks
       run: |
         docker run --rm -v "$PWD":/repo zricethezav/gitleaks:v8.21.2 \
-          dir /repo -v --redact
+          dir /repo -v --redact --config /repo/.gitleaks.toml
  
