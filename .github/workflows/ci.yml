@@ -1,0 +1,45 @@
+# CI de Pull Requests (issue #9)
+# Cada vez que alguien abre o actualiza un PR hacia main, GitHub levanta una
+# máquina limpia y construye la imagen Docker de cada microservicio.
+# Si alguna no compila, el PR queda en rojo y no se debería mergear.
+name: CI
+ 
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # permite correrlo a mano desde la pestaña Actions
+ 
+# Si se hace un push nuevo al mismo PR, se cancela la corrida vieja.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+ 
+# Mínimo privilegio: el workflow solo necesita leer el código.
+permissions:
+  contents: read
+ 
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false # si falla un servicio, igual seguimos viendo el resultado de los demás
+      matrix:
+        service: [ui, catalog, cart, orders, checkout, admin]
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+ 
+      - name: Preparar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+ 
+      - name: Construir imagen de ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src/${{ matrix.service }}
+          push: false # en el CI de PR solo construimos; publicar en ECR es el issue #10
+          tags: tero/${{ matrix.service }}:pr-${{ github.event.pull_request.number || 'manual' }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+ 
