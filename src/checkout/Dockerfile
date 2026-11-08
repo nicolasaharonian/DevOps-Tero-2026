@@ -11,7 +11,7 @@ RUN yarn build \
  && yarn cache clean --all
 
 # ---------- Etapa 2: ejecución (imagen mínima, sin root) ----------
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+FROM gcr.io/distroless/nodejs22-debian13:nonroot
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080
