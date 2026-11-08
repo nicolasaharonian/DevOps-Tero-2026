@@ -1,0 +1,148 @@
+briccardi@bruno:~/Documents/DevOps/Obligatorio/DevOps-Tero-2026$ docker run --rm -v "$PWD":/src semgrep/semgrep:1.95.0 \
+  semgrep scan --config p/default --metrics=off
+Unable to find image 'semgrep/semgrep:1.95.0' locally
+1.95.0: Pulling from semgrep/semgrep
+bfd90d6bdb4a: Pull complete 
+3614e08fbb32: Pull complete 
+f1aff66d8a35: Pull complete 
+84339753c3a9: Pull complete 
+9775332c48a3: Pull complete 
+0b1ef3c3c883: Pull complete 
+2a0b1749cffe: Pull complete 
+a0c05fb30ff3: Pull complete 
+ead7204b473b: Pull complete 
+ec4c4fb84544: Pull complete 
+a8caa71f941f: Pull complete 
+95438f944784: Pull complete 
+bc6d7381cba8: Pull complete 
+6d0ef13b02e7: Pull complete 
+2b53a73ad94f: Pull complete 
+3aaa6a71b060: Pull complete 
+43c4264eed91: Pull complete 
+2533eb73b4fa: Pull complete 
+Digest: sha256:30e6afa99ebd8e7b4115d4904898108eb4bf77025819e9263f09cf14e6f6e549
+Status: Downloaded newer image for semgrep/semgrep:1.95.0
+METRICS: Using configs from the Registry (like --config=p/ci) reports pseudonymous rule metrics to semgrep.dev.
+To disable Registry rule metrics, use "--metrics=off".
+Using configs only from local files (like --config=xyz.yml) does not enable metrics.
+
+More information: https://semgrep.dev/docs/metrics
+
+               
+               
+┌─────────────┐
+│ Scan Status │
+└─────────────┘
+  Scanning 94 files tracked by git with 1074 Code rules:
+                                                                                                                        
+  Language      Rules   Files          Origin      Rules                                                                
+ ─────────────────────────────        ───────────────────                                                               
+  <multilang>      60      93          Community    1074                                                                
+  ts              163      30                                                                                           
+  json              4      13                                                                                           
+  go               84      11                                                                                           
+  python          243       8                                                                                           
+  dockerfile        6       6                                                                                           
+  yaml             36       3                                                                                           
+  html              1       2                                                                                           
+  bash              4       1                                                                                           
+                                                                                                                        
+                   
+                   
+┌─────────────────┐
+│ 8 Code Findings │
+└─────────────────┘
+                            
+    .github/workflows/ci.yml
+    ❯❱ yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+          GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently   
+          repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-
+          github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: 
+          actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`.                                         
+          Details: https://sg.run/2LgAL                                                                       
+                                                                                                              
+           32┆ uses: actions/checkout@v4
+            ⋮┆----------------------------------------
+           35┆ uses: docker/setup-buildx-action@v3
+            ⋮┆----------------------------------------
+           38┆ uses: docker/build-push-action@v6
+            ⋮┆----------------------------------------
+           52┆ uses: actions/checkout@v4
+            ⋮┆----------------------------------------
+           65┆ uses: actions/checkout@v4
+                               
+    src/admin/public/index.html
+    ❯❱ html.security.audit.missing-integrity.missing-integrity
+          This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows
+          for the browser to verify that externally hosted files (for example from a CDN) are delivered       
+          without unexpected manipulation. Without this attribute, if an attacker can modify the externally   
+          hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the    
+          base64-encoded cryptographic hash of the resource (file) you’re telling the browser to fetch in the 
+          'integrity' attribute for all externally hosted files.                                              
+          Details: https://sg.run/krXA                                                                        
+                                                                                                              
+            8┆ <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'        
+               viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='9' fill='%23fff'/%3E%3Cpath       
+               d='M15.4 23.8 14.6 29.8M18.4 23.8 19 29.8' stroke='%23D9828C' stroke-width='1.5' stroke-   
+               linecap='round'/%3E%3Cpath d='M20 13.4C14.4 14 9.2 17 4.8 21.8L9 22.4C12 25 17 25.6 20.6   
+               23.2 23.2 21.2 23.6 16.6 22 14.2Z' fill='%237B817B'/%3E%3Cpath d='M18.4 17C14.8 18 11.2 20 
+               8.2 22.4 12.4 22.2 16.2 21 19.4 19Z' fill='%23565C56'/%3E%3Cpath d='M22.8 17.8C22.8 20.6   
+               21.9 22.2 20.6 23.2 17 25.6 12 25 9 22.4 14 22.4 19 20.8 22.8 17.8Z'                       
+               fill='%23fff'/%3E%3Cpath d='M18 14.6C20.4 13.6 23.4 14.8 23.2 17.8 21 19.6 18.6 19.4 17.2  
+               17.8Z' fill='%2315181D'/%3E%3Ccircle cx='21.6' cy='10.4' r='3.4'                           
+               fill='%237B817B'/%3E%3Cpath d='M24.8 9.4C25.2 12.2 24 14.4 21.8 15.4L20.2 14.4C22.4 13.6   
+               23.6 12 23.6 9.4Z' fill='%2315181D'/%3E%3Cpath d='M19.4 8C16.8 7.4 14 7.6 11 6.2 13.4 8.2  
+               16.4 9.4 18.8 9.8Z' fill='%2315181D'/%3E%3Cpath d='M24.8 9.8 27.4 10.6V11.6L24.8 11.9Z'    
+               fill='%23D62839'/%3E%3Cpath d='M27.4 10.6 30 11.2 27.4 11.6Z' fill='%2315181D'/%3E%3Ccircle
+               cx='22.4' cy='9.9' r='1.1' fill='%23D62839'/%3E%3Ccircle cx='22.4' cy='9.9' r='.42'        
+               fill='%2315181D'/%3E%3C/svg%3E" />                                                         
+                            
+    src/checkout/.yarnrc.yml
+    ❯❱ package_managers.yarn.yarn-missing-minimal-age-gate.yarn-missing-minimal-age-gate
+          This .yarnrc.yml does not set a minimal age gate or sets it too low. Newly published packages can be
+          malicious or unstable. Add `npmMinimalAgeGate: "7d"` to wait 7 days before resolving newly published
+          package versions. Added in: 4.10 Reference:                                                         
+          https://yarnpkg.com/configuration/yarnrc#npmMinimalAgeGate                                          
+          Details: https://sg.run/0gvNq                                                                       
+                                                                                                              
+            1┆ nodeLinker: node-modules
+                            
+    src/ui/public/index.html
+    ❯❱ html.security.audit.missing-integrity.missing-integrity
+          This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows
+          for the browser to verify that externally hosted files (for example from a CDN) are delivered       
+          without unexpected manipulation. Without this attribute, if an attacker can modify the externally   
+          hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the    
+          base64-encoded cryptographic hash of the resource (file) you’re telling the browser to fetch in the 
+          'integrity' attribute for all externally hosted files.                                              
+          Details: https://sg.run/krXA                                                                        
+                                                                                                              
+            8┆ <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'        
+               viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='9' fill='%23fff'/%3E%3Cpath       
+               d='M15.4 23.8 14.6 29.8M18.4 23.8 19 29.8' stroke='%23D9828C' stroke-width='1.5' stroke-   
+               linecap='round'/%3E%3Cpath d='M20 13.4C14.4 14 9.2 17 4.8 21.8L9 22.4C12 25 17 25.6 20.6   
+               23.2 23.2 21.2 23.6 16.6 22 14.2Z' fill='%237B817B'/%3E%3Cpath d='M18.4 17C14.8 18 11.2 20 
+               8.2 22.4 12.4 22.2 16.2 21 19.4 19Z' fill='%23565C56'/%3E%3Cpath d='M22.8 17.8C22.8 20.6   
+               21.9 22.2 20.6 23.2 17 25.6 12 25 9 22.4 14 22.4 19 20.8 22.8 17.8Z'                       
+               fill='%23fff'/%3E%3Cpath d='M18 14.6C20.4 13.6 23.4 14.8 23.2 17.8 21 19.6 18.6 19.4 17.2  
+               17.8Z' fill='%2315181D'/%3E%3Ccircle cx='21.6' cy='10.4' r='3.4'                           
+               fill='%237B817B'/%3E%3Cpath d='M24.8 9.4C25.2 12.2 24 14.4 21.8 15.4L20.2 14.4C22.4 13.6   
+               23.6 12 23.6 9.4Z' fill='%2315181D'/%3E%3Cpath d='M19.4 8C16.8 7.4 14 7.6 11 6.2 13.4 8.2  
+               16.4 9.4 18.8 9.8Z' fill='%2315181D'/%3E%3Cpath d='M24.8 9.8 27.4 10.6V11.6L24.8 11.9Z'    
+               fill='%23D62839'/%3E%3Cpath d='M27.4 10.6 30 11.2 27.4 11.6Z' fill='%2315181D'/%3E%3Ccircle
+               cx='22.4' cy='9.9' r='1.1' fill='%23D62839'/%3E%3Ccircle cx='22.4' cy='9.9' r='.42'        
+               fill='%2315181D'/%3E%3C/svg%3E" />                                                         
+
+                
+                
+┌──────────────┐
+│ Scan Summary │
+└──────────────┘
+Some files were skipped or only partially analyzed.
+  Scan was limited to files tracked by git.
+  Scan skipped: 1 files larger than 1.0 MB
+  For a full list of skipped files, run semgrep with the --verbose flag.
+
+Ran 595 rules on 93 files: 8 findings.
+
+A new version of Semgrep is available. See https://semgrep.dev/docs/upgrading
