@@ -7,7 +7,7 @@
 # actualizar, cuántas vulnerabilidades corrige y qué hacer.
 #
 # Uso (desde la raíz del repo, con las imágenes ya construidas):
-#   ./scripts/trivy-resumen.sh                 -> genera trivy-resumen.md
+#   ./scripts/trivy-resumen.sh                 -> genera docs/evidencia/seguridad/trivy-resumen.md
 #   ./scripts/trivy-resumen.sh mi-archivo.md   -> otro nombre de salida
 #
 # Requisitos: Docker y python3.
@@ -17,7 +17,7 @@ set -euo pipefail
 TRIVY_IMAGE="aquasec/trivy:0.57.0"
 PREFIJO_IMAGEN="devops-tero-2026"
 SERVICIOS="ui catalog carts orders checkout admin"
-SALIDA="${1:-trivy-resumen.md}"
+SALIDA="${1:-docs/evidencia/seguridad/trivy-resumen.md}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
