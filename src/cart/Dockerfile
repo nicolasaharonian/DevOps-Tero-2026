@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # ---------- Etapa 2: ejecución ----------
 FROM python:3.12-slim AS runtime
+# Aplica los parches de seguridad publicados por Debian que la imagen base todavía no incluye
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
