@@ -13,7 +13,6 @@
 #   - Las acciones de GitHub están fijadas por SHA de commit (no por tag como @v4)
 #     para evitar ataques de supply chain. El comentario indica la versión.
 
-
 name: CI
 
 on:
@@ -30,6 +29,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  IMAGE_TAG: pr-${{ github.event.pull_request.number || 'manual' }}
+
 jobs:
   # ---------------------------------------------------------------
   # 1. Build de las imágenes
@@ -39,9 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
-      fail-fast: false # si falla un servicio, igual seguimos viendo el resultado de los demás
+      fail-fast: false
       matrix:
         service: [ui, catalog, cart, orders, checkout, admin]
+
     steps:
       - name: Descargar el código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -54,13 +57,13 @@ jobs:
         with:
           context: ./src/${{ matrix.service }}
           push: false # en el CI de PR solo construimos; publicar en ECR es el issue #10
-          tags: tero/${{ matrix.service }}:pr-${{ github.event.pull_request.number || 'manual' }}
+          tags: tero/${{ matrix.service }}:${{ env.IMAGE_TAG }}
           labels: |
             org.opencontainers.image.version=${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'manual' }}
             org.opencontainers.image.revision=${{ github.event.pull_request.head.sha || github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-  
+
   # ---------------------------------------------------------------
   # 2. Escaneo de las imágenes (Trivy image) - requisito 5.3
   # Cada job corre en una máquina distinta: la imagen del job build no existe
@@ -79,22 +82,24 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
- 
+
       - name: Preparar Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
- 
+
       - name: Build imagen para escaneo
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./src/${{ matrix.service }}
           push: false
-          load: true # deja la imagen en el Docker local para que Trivy la pueda escanear
+          load: true
           tags: tero/${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.version=${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'manual' }}
+            org.opencontainers.image.revision=${{ github.event.pull_request.head.sha || github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
- 
-      # Quality gate: falla si hay vulnerabilidades HIGH o CRITICAL con arreglo
-      # disponible. Las que no tienen parche se ignoran (--ignore-unfixed) y se
-      # documentan como excepción.
+
+      # Quality gate: falla si hay vulnerabilidades HIGH o CRITICAL
+      # con arreglo disponible. Las que no tienen parche se ignoran.
       - name: Escaneo Trivy
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
@@ -103,7 +108,7 @@ jobs:
             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
             --ignorefile /src/.trivyignore \
             tero/${{ matrix.service }}:${{ env.IMAGE_TAG }}
-  
+
   # ---------------------------------------------------------------
   # 3. Secretos en el código (Gitleaks) - requisito 5.7
   # ---------------------------------------------------------------
@@ -111,6 +116,7 @@ jobs:
     name: Secretos (Gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Descargar el código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -120,10 +126,15 @@ jobs:
           docker run --rm -v "$PWD":/repo zricethezav/gitleaks:v8.21.2 \
             dir /repo -v --redact --config /repo/.gitleaks.toml
 
+  # ---------------------------------------------------------------
+  # 4. Código inseguro (Semgrep, SAST) - requisito 5.4
+  # ---------------------------------------------------------------
+
   semgrep:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Descargar el código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -133,3 +144,22 @@ jobs:
           docker run --rm -v "$PWD":/src semgrep/semgrep:1.95.0 \
             semgrep scan --config p/default --metrics=off \
             --error --severity ERROR
+
+  # ---------------------------------------------------------------
+  # 5. Dependencias vulnerables (Trivy fs, SCA) - requisitos 5.1 y 5.2
+  # ---------------------------------------------------------------
+
+  trivy-fs:
+    name: SCA dependencias (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Escaneo Trivy de dependencias
+        run: |
+          docker run --rm -v "$PWD":/src aquasec/trivy:0.57.0 fs \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            /src
