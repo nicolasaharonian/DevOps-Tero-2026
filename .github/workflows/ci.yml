@@ -5,6 +5,7 @@
 #   - gitleaks:  busca secretos expuestos en el código
 #   - semgrep:   busca código inseguro (SAST)
 #   - trivy-fs:  busca vulnerabilidades conocidas en las dependencias (SCA)
+#   - sonarcloud: análisis estático de calidad con quality gate (issue #13)
 # Si algún job falla, el PR queda en rojo.
 #
 # Criterios comunes:
@@ -17,6 +18,10 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
+  # También corre al mergear a main: SonarCloud necesita analizar main para
+  # tener la "foto" completa del proyecto y comparar los PRs contra ella.
+  push:
     branches: [main]
   workflow_dispatch: # permite correrlo a mano desde la pestaña Actions
 
@@ -163,3 +168,36 @@ jobs:
           docker run --rm -v "$PWD":/src aquasec/trivy:0.57.0 fs \
             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
             /src
+
+  # ---------------------------------------------------------------
+  # 6. Calidad de código (SonarCloud) - requisitos 4.2 y 4.3
+  # Analiza bugs, code smells, duplicación y vulnerabilidades del código y
+  # aplica el quality gate "Sonar way" sobre el código nuevo del PR:
+  #   - Reliability, Security y Maintainability rating = A (sin bugs,
+  #     vulnerabilidades ni code smells relevantes nuevos)
+  #   - Duplicación en código nuevo <= 3%
+  #   - 100% de los Security Hotspots nuevos revisados
+  #   - Coverage: no aplica (ver sonar-project.properties)
+  # La configuración está en sonar-project.properties (raíz del repo).
+  # El token se guarda como secreto del repo (SONAR_TOKEN), nunca en el código.
+  # ---------------------------------------------------------------
+
+  sonarcloud:
+    name: Quality Gate (SonarCloud)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # historial completo: Sonar lo usa para saber qué código es nuevo
+
+      # Mismo esquema que el laboratorio 04-SonarCloud (checkout con historial +
+      # acción de Sonar + SONAR_TOKEN). Diferencia: el lab usa
+      # sonarcloud-github-action@master, que Sonar marcó como deprecada; usamos
+      # su reemplazo oficial, sonarqube-scan-action, fijado por SHA.
+      - name: Análisis SonarCloud
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

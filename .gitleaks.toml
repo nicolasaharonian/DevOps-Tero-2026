@@ -11,3 +11,10 @@ paths = [
   # pública de solo lectura de Algolia, propia de Yarn: no es un secreto de Tero.
   '''\.yarn/releases/''',
 ]
+regexes = [
+  # Project key de SonarCloud (sonar-project.properties). Es un identificador
+  # público del proyecto (aparece en la URL de sonarcloud.io), no un secreto;
+  # Gitleaks lo marca por la palabra "Key". El secreto real es SONAR_TOKEN y
+  # está en los secretos de GitHub, no en el repo.
+  '''^nicolasaharonian_DevOps-Tero-2026$''',
+]
