@@ -1,2 +1,9 @@
 # Variables de entorno y credenciales
 .env
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
