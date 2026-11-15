@@ -7,3 +7,5 @@
 *.tfstate.*
 *.tfplan
 crash.log
+# Reportes de Newman (se generan al correr las pruebas)
+tests/integration/resultados/

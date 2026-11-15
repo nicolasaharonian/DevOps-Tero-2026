@@ -6,6 +6,8 @@
 #   - semgrep:   busca código inseguro (SAST)
 #   - trivy-fs:  busca vulnerabilidades conocidas en las dependencias (SCA)
 #   - sonarcloud: análisis estático de calidad con quality gate (issue #13)
+#   - integration: levanta la app con docker compose y corre las pruebas
+#                  de integración con Newman (issue #12)
 # Si algún job falla, el PR queda en rojo.
 #
 # Criterios comunes:
@@ -201,3 +203,79 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ---------------------------------------------------------------
+  # 7. Pruebas de integración (Postman/Newman) - requisito 4.1
+  # Levanta la app completa con docker compose (los 6 servicios + Postgres
+  # + Redis, igual que en local) y corre la colección de Postman con Newman.
+  # La colección recorre el flujo de compra a través de la UI, que funciona
+  # como API Gateway (/api/* -> catalog, carts, checkout, orders):
+  #   catálogo -> agregar al carrito -> ver carrito -> checkout -> orden creada
+  # Si una sola aserción falla, Newman termina con código 1 y el job queda en
+  # rojo. La misma colección sirve después para Dev/Test (issue #11): solo
+  # cambia baseUrl.
+  # ---------------------------------------------------------------
+
+  integration:
+    name: Tests de integración (Newman)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # docker compose necesita un .env. Se genera en el momento con
+      # contraseñas aleatorias: son de una base que vive 5 minutos y se tira,
+      # y así no hay ninguna credencial escrita en el repo.
+      - name: Crear .env de prueba
+        run: |
+          {
+            echo "POSTGRES_USER=retail_user"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "ADMIN_USERNAME=admin"
+            echo "ADMIN_PASSWORD=$(openssl rand -hex 16)"
+            echo "ADMIN_JWT_SECRET=$(openssl rand -hex 32)"
+          } > .env
+
+      # --wait espera a que los contenedores estén arriba (y la base "healthy").
+      - name: Levantar la aplicación (docker compose)
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      # Algunos servicios no tienen healthcheck: confirmamos que la UI ya
+      # responde y llega al catálogo antes de empezar las pruebas.
+      - name: Esperar a que la aplicación responda
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/catalog/products > /dev/null; then
+              echo "La aplicación responde"; exit 0
+            fi
+            echo "Esperando... ($i/30)"; sleep 2
+          done
+          echo "La aplicación no respondió a tiempo"; exit 1
+
+      # Newman con su imagen Docker oficial y versión fija, como el resto de
+      # las herramientas. --network host: el contenedor de Newman ve el
+      # localhost:8080 del runner, donde está publicada la UI.
+      - name: Correr la colección con Newman
+        run: |
+          docker run --rm --network host \
+            -v "$PWD/tests/integration":/etc/newman \
+            postman/newman:6.1.3-alpine run tero.postman_collection.json \
+            --env-var baseUrl=http://localhost:8080 \
+            --reporters cli,junit \
+            --reporter-junit-export /etc/newman/resultados/newman.xml
+
+      # Si algo falla, los logs de los servicios ayudan a ver dónde se cortó.
+      - name: Logs de los servicios (solo si falló)
+        if: failure()
+        run: docker compose logs --no-color --tail 100
+
+      # El reporte JUnit queda descargable desde la corrida (evidencia).
+      - name: Guardar reporte de Newman
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reporte-newman
+          path: tests/integration/resultados/
+          if-no-files-found: ignore
