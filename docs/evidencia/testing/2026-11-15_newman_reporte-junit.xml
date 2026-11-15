@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Tero - pruebas de integración" tests="6" time="0.122">
+  <testsuite name="1. Catálogo - listar productos" id="a88b6182-72f2-4efe-8639-976024f3e6f2" timestamp="2026-11-15T02:56:16.374Z" tests="3" failures="0" errors="0" time="0.019">
+    <testcase name="Responde 200" time="0.019" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="Devuelve una lista con al menos un producto" time="0.019" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="Cada producto tiene id, nombre y precio" time="0.019" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+  <testsuite name="2. Carrito - agregar producto" id="0bc8178e-3b93-4134-b7cf-2c6982d42105" timestamp="2026-11-15T02:56:16.374Z" tests="2" failures="0" errors="0" time="0.035">
+    <testcase name="Responde 201 (creado)" time="0.035" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="Devuelve el producto agregado" time="0.035" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+  <testsuite name="3. Carrito - ver carrito" id="e1bb4428-2f8f-4853-8cf6-6fe24a7611a9" timestamp="2026-11-15T02:56:16.374Z" tests="2" failures="0" errors="0" time="0.006">
+    <testcase name="Responde 200" time="0.006" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="El carrito tiene el producto guardado" time="0.006" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+  <testsuite name="4. Checkout - preparar compra" id="e6f53be7-1ca8-4e06-b4c9-dcbce6d5884e" timestamp="2026-11-15T02:56:16.374Z" tests="2" failures="0" errors="0" time="0.028">
+    <testcase name="Responde 201" time="0.028" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="Calcula el subtotal = precio x cantidad" time="0.028" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+  <testsuite name="5. Checkout - confirmar compra" id="6dca2e83-f6d8-45de-bf87-bff605d6a4cd" timestamp="2026-11-15T02:56:16.374Z" tests="2" failures="0" errors="0" time="0.030">
+    <testcase name="Responde 201" time="0.030" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="Devuelve el id de la orden creada" time="0.030" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+  <testsuite name="6. Órdenes - la orden quedó registrada" id="630edbd6-9c36-47e9-acd7-7b36452b31ef" timestamp="2026-11-15T02:56:16.374Z" tests="2" failures="0" errors="0" time="0.004">
+    <testcase name="Responde 200" time="0.004" classname="TeroPruebasDeIntegracion"/>
+    <testcase name="La orden creada aparece en el listado con el producto comprado" time="0.004" classname="TeroPruebasDeIntegracion"/>
+  </testsuite>
+</testsuites>
