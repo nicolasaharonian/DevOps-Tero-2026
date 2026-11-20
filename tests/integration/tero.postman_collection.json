@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "Tero - pruebas de integración",
+    "description": "Recorre el flujo de compra a través de la UI (que actúa como API Gateway: /api/* -> microservicios).\nSe corre con Newman en el CI (issue #12). Variable baseUrl: dónde está la UI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Catálogo - listar productos",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const productos = pm.response.json();",
+              "",
+              "pm.test(\"Devuelve una lista con al menos un producto\", function () {",
+              "    pm.expect(productos).to.be.an(\"array\").that.is.not.empty;",
+              "});",
+              "",
+              "pm.test(\"Cada producto tiene id, nombre y precio\", function () {",
+              "    productos.forEach(function (p) {",
+              "        pm.expect(p).to.have.property(\"id\");",
+              "        pm.expect(p).to.have.property(\"name\");",
+              "        pm.expect(p.price).to.be.a(\"number\");",
+              "    });",
+              "});",
+              "",
+              "// Guardamos el primer producto para usarlo en los pasos siguientes.",
+              "// Cliente nuevo en cada corrida: así las pruebas no dependen de datos viejos.",
+              "pm.collectionVariables.set(\"productId\", productos[0].id);",
+              "pm.collectionVariables.set(\"productName\", productos[0].name);",
+              "pm.collectionVariables.set(\"productPrice\", productos[0].price);",
+              "pm.collectionVariables.set(\"customerId\", \"newman-\" + Date.now());"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/catalog/products",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "catalog",
+            "products"
+          ]
+        },
+        "description": "UI -> catalog -> PostgreSQL. Verifica que el catálogo responde y trae datos de la base."
+      }
+    },
+    {
+      "name": "2. Carrito - agregar producto",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 201 (creado)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Devuelve el producto agregado\", function () {",
+              "    const item = pm.response.json();",
+              "    pm.expect(item.itemId).to.eql(pm.collectionVariables.get(\"productId\"));",
+              "    pm.expect(item.quantity).to.eql(2);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/carts/{{customerId}}/items",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "carts",
+            "{{customerId}}",
+            "items"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"itemId\": \"{{productId}}\",\n  \"quantity\": 2,\n  \"unitPrice\": {{productPrice}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "UI -> carts -> PostgreSQL. Agrega 2 unidades del producto obtenido en el paso 1."
+      }
+    },
+    {
+      "name": "3. Carrito - ver carrito",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"El carrito tiene el producto guardado\", function () {",
+              "    const carrito = pm.response.json();",
+              "    const item = carrito.items.find(i => i.itemId === pm.collectionVariables.get(\"productId\"));",
+              "    pm.expect(item, \"producto en el carrito\").to.exist;",
+              "    pm.expect(item.quantity).to.eql(2);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/carts/{{customerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "carts",
+            "{{customerId}}"
+          ]
+        },
+        "description": "Lee el carrito de nuevo: confirma que el dato quedó persistido, no solo que el POST respondió bien."
+      }
+    },
+    {
+      "name": "4. Checkout - preparar compra",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Calcula el subtotal = precio x cantidad\", function () {",
+              "    const checkout = pm.response.json();",
+              "    const precio = Number(pm.collectionVariables.get(\"productPrice\"));",
+              "    pm.expect(checkout.subtotal).to.eql(precio * 2);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/checkout/{{customerId}}/update",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "checkout",
+            "{{customerId}}",
+            "update"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"id\": \"{{productId}}\",\n      \"name\": \"{{productName}}\",\n      \"quantity\": 2,\n      \"price\": {{productPrice}}\n    }\n  ],\n  \"shippingAddress\": {\n    \"firstName\": \"Prueba\",\n    \"lastName\": \"Newman\",\n    \"address1\": \"Av. Siempre Viva 742\",\n    \"city\": \"Montevideo\",\n    \"state\": \"Montevideo\",\n    \"zip\": \"11000\",\n    \"email\": \"newman@example.com\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "UI -> checkout -> Redis. Arma la compra con los datos del carrito."
+      }
+    },
+    {
+      "name": "5. Checkout - confirmar compra",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Devuelve el id de la orden creada\", function () {",
+              "    const resultado = pm.response.json();",
+              "    pm.expect(resultado.orderId).to.be.a(\"string\").and.not.empty;",
+              "    pm.collectionVariables.set(\"orderId\", resultado.orderId);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/checkout/{{customerId}}/submit",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "checkout",
+            "{{customerId}}",
+            "submit"
+          ]
+        },
+        "description": "UI -> checkout -> orders -> PostgreSQL. Es la prueba de integración clave: checkout llama a orders por HTTP."
+      }
+    },
+    {
+      "name": "6. Órdenes - la orden quedó registrada",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"La orden creada aparece en el listado con el producto comprado\", function () {",
+              "    const ordenes = pm.response.json();",
+              "    const orden = ordenes.find(o => o.id === pm.collectionVariables.get(\"orderId\"));",
+              "    pm.expect(orden, \"orden en el listado\").to.exist;",
+              "    pm.expect(orden.items[0].productId).to.eql(pm.collectionVariables.get(\"productId\"));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "description": "Consulta orders directamente: confirma que la orden que creó checkout quedó guardada."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "customerId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "productName",
+      "value": ""
+    },
+    {
+      "key": "productPrice",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    }
+  ]
+}
