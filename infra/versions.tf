@@ -14,6 +14,16 @@ terraform {
 
     }
 
+    # Genera valores al azar (contraseñas de los secretos de la aplicación)
+
+    random = {
+
+      source = "hashicorp/random"
+
+      version = "~> 3.7"
+
+    }
+
   }
 
   # Backend remoto: el state se guarda en el bucket S3 creado a mano
