@@ -22,4 +22,9 @@ module "network" {
   vpc_cidr = var.vpc_cidr
   az_count = var.az_count
 }
- 
+
+module "security" {
+  source = "./modules/security"
+  name   = local.name
+  vpc_id = module.network.vpc_id
+}
