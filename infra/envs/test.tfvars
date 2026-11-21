@@ -1,5 +1,5 @@
 environment = "test"
-vpc_cidr    = "10.30.0.0/16"
+vpc_cidr    = "10.20.0.0/16"
 az_count    = 2
 # Base de datos y Redis: igual que dev
 db_instance_class        = "db.t3.micro"
