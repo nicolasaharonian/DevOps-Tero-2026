@@ -28,3 +28,32 @@ module "security" {
   name   = local.name
   vpc_id = module.network.vpc_id
 }
+
+# Base de datos PostgreSQL (RDS) en las subredes privadas
+module "database" {
+  source            = "./modules/database"
+  name              = local.name
+  subnet_ids        = module.network.private_subnet_ids
+  security_group_id = module.security.db_sg_id
+
+  instance_class        = var.db_instance_class
+  multi_az              = var.db_multi_az
+  backup_retention_days = var.db_backup_retention_days
+  deletion_protection   = var.db_deletion_protection
+  skip_final_snapshot   = var.db_skip_final_snapshot
+}
+
+# Redis (ElastiCache) para el servicio checkout
+module "cache" {
+  source            = "./modules/cache"
+  name              = local.name
+  subnet_ids        = module.network.private_subnet_ids
+  security_group_id = module.security.redis_sg_id
+  node_type         = var.redis_node_type
+}
+
+# Secretos de la aplicación (Secrets Manager)
+module "secrets" {
+  source      = "./modules/secrets"
+  environment = var.environment
+}

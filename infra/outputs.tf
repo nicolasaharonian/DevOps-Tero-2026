@@ -32,3 +32,49 @@ output "redis_sg_id" {
   description = "ID del security group de ElastiCache Redis."
   value       = module.security.redis_sg_id
 }
+
+# ---------- Base de datos ----------
+
+output "db_address" {
+  description = "Host de la base PostgreSQL (DB_HOST, CART_POSTGRES_HOST)."
+  value       = module.database.address
+}
+
+output "db_port" {
+  description = "Puerto de la base PostgreSQL."
+  value       = module.database.port
+}
+
+output "db_endpoint" {
+  description = "Host y puerto de la base (RETAIL_CATALOG_PERSISTENCE_ENDPOINT, RETAIL_ORDERS_PERSISTENCE_ENDPOINT)."
+  value       = module.database.endpoint
+}
+
+output "db_username" {
+  description = "Usuario de la base que usan los servicios."
+  value       = module.database.username
+}
+
+output "db_secret_arn" {
+  description = "ARN del secreto de RDS con la contraseña de la base (clave password)."
+  value       = module.database.master_secret_arn
+}
+
+# ---------- Redis ----------
+
+output "redis_address" {
+  description = "Host de ElastiCache Redis."
+  value       = module.cache.address
+}
+
+output "redis_url" {
+  description = "URL de Redis para checkout (RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL)."
+  value       = module.cache.url
+}
+
+# ---------- Secretos ----------
+
+output "admin_secret_arn" {
+  description = "ARN del secreto del servicio admin (claves ADMIN_PASSWORD y ADMIN_JWT_SECRET)."
+  value       = module.secrets.admin_secret_arn
+}
