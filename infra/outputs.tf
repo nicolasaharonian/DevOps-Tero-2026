@@ -78,3 +78,20 @@ output "admin_secret_arn" {
   description = "ARN del secreto del servicio admin (claves ADMIN_PASSWORD y ADMIN_JWT_SECRET)."
   value       = module.secrets.admin_secret_arn
 }
+
+# ---------- ALB ----------
+
+output "app_url" {
+  description = "URL de la tienda."
+  value       = module.alb.url
+}
+
+output "admin_url" {
+  description = "URL del panel de administración."
+  value       = "${module.alb.url}/admin"
+}
+
+output "image_tag" {
+  description = "Versión (SHA corto del commit) desplegada en los servicios."
+  value       = local.image_tag
+}

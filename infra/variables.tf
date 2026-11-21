@@ -58,3 +58,11 @@ variable "redis_node_type" {
   type        = string
   default     = "cache.t3.micro"
 }
+
+# ---------- Servicios (ECS) ----------
+
+variable "image_tag" {
+  description = "Tag de las imágenes a desplegar (SHA corto del commit). Si no se pasa, se usa la última imagen publicada en ECR."
+  type        = string
+  default     = null
+}
