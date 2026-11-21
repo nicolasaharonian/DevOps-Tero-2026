@@ -6,32 +6,44 @@ resource "aws_security_group" "alb" {
   name        = "${var.name}-alb-sg"
   description = "ALB - recibe trafico HTTP desde internet"
   vpc_id      = var.vpc_id
-  tags        = { Name = "${var.name}-alb-sg" }
+
+  tags = { Name = "${var.name}-alb-sg" }
+}
+
+resource "aws_security_group" "internal_alb" {
+  name        = "${var.name}-internal-alb-sg"
+  description = "ALB interno - trafico entre microservicios"
+  vpc_id      = var.vpc_id
+
+  tags = { Name = "${var.name}-internal-alb-sg" }
 }
 
 resource "aws_security_group" "ecs" {
   name        = "${var.name}-ecs-sg"
   description = "Tareas ECS - microservicios de Tero"
   vpc_id      = var.vpc_id
-  tags        = { Name = "${var.name}-ecs-sg" }
+
+  tags = { Name = "${var.name}-ecs-sg" }
 }
 
 resource "aws_security_group" "db" {
   name        = "${var.name}-db-sg"
   description = "RDS PostgreSQL - solo accesible desde ECS"
   vpc_id      = var.vpc_id
-  tags        = { Name = "${var.name}-db-sg" }
+
+  tags = { Name = "${var.name}-db-sg" }
 }
 
 resource "aws_security_group" "redis" {
   name        = "${var.name}-redis-sg"
   description = "ElastiCache Redis - solo accesible desde ECS"
   vpc_id      = var.vpc_id
-  tags        = { Name = "${var.name}-redis-sg" }
+
+  tags = { Name = "${var.name}-redis-sg" }
 }
 
 # =====================================================================
-# 2) Reglas del ALB
+# 2) Reglas del ALB público
 # =====================================================================
 
 # Entrada: cualquiera en internet puede llegar al ALB por el puerto 80
@@ -55,40 +67,64 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
 }
 
 # =====================================================================
-# 3) Reglas de ECS
+# 3) Reglas del ALB interno
 # =====================================================================
 
-# Entrada: el ALB puede llegar a los servicios
-resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
-  security_group_id            = aws_security_group.ecs.id
-  description                  = "Trafico desde el ALB"
-  referenced_security_group_id = aws_security_group.alb.id
+# Entrada: solo las tareas ECS (ui, checkout) pueden llamarlo. Internet no.
+resource "aws_vpc_security_group_ingress_rule" "internal_alb_from_ecs" {
+  security_group_id            = aws_security_group.internal_alb.id
+  description                  = "HTTP desde los servicios en ECS"
+  referenced_security_group_id = aws_security_group.ecs.id
   ip_protocol                  = "tcp"
-  from_port                    = var.app_port
-  to_port                      = var.app_port
+  from_port                    = var.alb_port
+  to_port                      = var.alb_port
 }
 
-# Entrada: los servicios se pueden llamar entre ellos (ui -> catalog, checkout -> orders...)
-resource "aws_vpc_security_group_ingress_rule" "ecs_from_ecs" {
-  security_group_id            = aws_security_group.ecs.id
-  description                  = "Trafico entre microservicios"
+# Salida: reenvia a los servicios internos
+resource "aws_vpc_security_group_egress_rule" "internal_alb_to_ecs" {
+  security_group_id            = aws_security_group.internal_alb.id
+  description                  = "Reenvio hacia los servicios en ECS"
   referenced_security_group_id = aws_security_group.ecs.id
   ip_protocol                  = "tcp"
   from_port                    = var.app_port
   to_port                      = var.app_port
 }
 
+# =====================================================================
+# 4) Reglas de ECS
+# =====================================================================
+
+# Entrada: el ALB público puede llegar a los servicios (ui, admin)
+resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
+  security_group_id            = aws_security_group.ecs.id
+  description                  = "Trafico desde el ALB publico"
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.app_port
+  to_port                      = var.app_port
+}
+
+# Entrada: el ALB interno puede llegar a los servicios (catalog, carts, checkout, orders)
+resource "aws_vpc_security_group_ingress_rule" "ecs_from_internal_alb" {
+  security_group_id            = aws_security_group.ecs.id
+  description                  = "Trafico desde el ALB interno"
+  referenced_security_group_id = aws_security_group.internal_alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.app_port
+  to_port                      = var.app_port
+}
+
 # Salida: los servicios pueden salir a cualquier lado
-# (bajar imagenes de ECR, leer Secrets Manager, mandar logs, hablar con RDS y Redis)
+# (bajar imagenes de ECR, leer Secrets Manager, mandar logs, hablar con RDS, Redis y el ALB interno)
 resource "aws_vpc_security_group_egress_rule" "ecs_all_out" {
   security_group_id = aws_security_group.ecs.id
-  description       = "Salida libre (ECR, Secrets Manager, CloudWatch, RDS, Redis)"
+  description       = "Salida libre (ECR, Secrets Manager, CloudWatch, RDS, Redis, ALB interno)"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
 
 # =====================================================================
-# 4) Reglas de la base de datos y Redis
+# 5) Reglas de la base de datos y Redis
 # =====================================================================
 
 # Entrada: solo las tareas ECS llegan a Postgres
