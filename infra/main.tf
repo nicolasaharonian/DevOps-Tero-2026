@@ -57,3 +57,22 @@ module "secrets" {
   source      = "./modules/secrets"
   environment = var.environment
 }
+
+# Balanceador: recibe a los usuarios y reparte entre ui y admin
+module "alb" {
+  source            = "./modules/alb"
+  name              = local.name
+  vpc_id            = module.network.vpc_id
+  public_subnet_ids = module.network.public_subnet_ids
+  alb_sg_id         = module.security.alb_sg_id
+}
+
+# Balanceador interno: comunicación entre microservicios
+# (reemplaza a Service Connect, que el Learner Lab no permite)
+module "internal_alb" {
+  source            = "./modules/internal-alb"
+  name              = local.name
+  vpc_id            = module.network.vpc_id
+  subnet_ids        = module.network.private_subnet_ids
+  security_group_id = module.security.internal_alb_sg_id
+}
