@@ -179,3 +179,39 @@ module "checkout" {
   execution_role_arn = data.aws_iam_role.lab.arn
   task_role_arn      = data.aws_iam_role.lab.arn
 }
+
+# ---------- admin: panel de administración (público, en /admin) ----------
+ 
+module "admin" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "admin"
+  image = "${local.ecr_registry}/tero/admin:${local.image_tag}"
+ 
+  # Sus variables: las mismas que admin tiene en el docker-compose.yml
+  environment = {
+    DB_HOST        = module.database.address
+    DB_PORT        = tostring(module.database.port)
+    DB_USER        = module.database.username
+    ADMIN_USERNAME = "admin"
+  }
+ 
+  # Tres secretos: la contraseña de la base y los dos del panel
+  secrets = {
+    DB_PASSWORD      = "${module.database.master_secret_arn}:password::"
+    ADMIN_PASSWORD   = "${module.secrets.admin_secret_arn}:ADMIN_PASSWORD::"
+    ADMIN_JWT_SECRET = "${module.secrets.admin_secret_arn}:ADMIN_JWT_SECRET::"
+  }
+ 
+  # Es pública: se anota en el ALB público (regla /admin, /admin/*, /auth/*)
+  target_group_arn = module.alb.admin_target_group_arn
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
