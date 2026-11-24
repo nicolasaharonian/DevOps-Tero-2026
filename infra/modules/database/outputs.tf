@@ -24,6 +24,6 @@ output "username" {
 }
 
 output "master_secret_arn" {
-  description = "ARN del secreto (creado por RDS) con el usuario y la contraseña de la base. Claves: username, password."
-  value       = aws_db_instance.this.master_user_secret[0].secret_arn
+  description = "ARN del secreto con el usuario y la contraseña de la base. Claves: username, password."
+  value       = aws_secretsmanager_secret.master.arn
 }

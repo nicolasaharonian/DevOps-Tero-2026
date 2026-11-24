@@ -95,3 +95,21 @@ output "image_tag" {
   description = "Versión (SHA corto del commit) desplegada en los servicios."
   value       = local.image_tag
 }
+
+# ---------- Inicialización de la base ----------
+
+output "init_db_command" {
+  description = "Comando para correr la tarea que inicializa la base (init-db.sql). Se corre una vez cada vez que se crea RDS."
+
+  value = join(" ", [
+    "aws ecs run-task",
+    "--cluster ${aws_ecs_cluster.this.name}",
+    "--launch-type FARGATE",
+    "--task-definition ${aws_ecs_task_definition.init_db.family}",
+    "--network-configuration awsvpcConfiguration={${join(",", [
+      "subnets=[${join(",", module.network.public_subnet_ids)}]",
+      "securityGroups=[${module.security.ecs_sg_id}]",
+      "assignPublicIp=ENABLED",
+    ])}}",
+  ])
+}

@@ -340,3 +340,67 @@ cd infra
 terraform workspace select dev
 terraform destroy -var-file=envs/dev.tfvars
 ```
+
+## 11. Levantar y bajar un ambiente
+
+### Levantar (por ejemplo, al empezar el día)
+
+```bash
+cd infra
+terraform workspace select dev
+terraform apply -var-file=envs/dev.tfvars          # ~15 minutos (RDS es lo más lento)
+```
+
+Si RDS se creó de cero, la base está vacía: hay que inicializarla y reiniciar los servicios que arrancaron antes de que existieran sus bases (ver `datos.md`).
+
+```bash
+$(terraform output -raw init_db_command)           # corre init-db.sql contra RDS
+aws logs tail /ecs/tero-dev/init-db                # 1-2 min después: CREATE DATABASE, CREATE TABLE
+
+aws ecs update-service --cluster tero-dev-cluster --service catalog --force-new-deployment
+aws ecs update-service --cluster tero-dev-cluster --service carts --force-new-deployment
+aws ecs update-service --cluster tero-dev-cluster --service admin --force-new-deployment
+```
+
+Después de 2 o 3 minutos:
+
+```bash
+terraform output app_url      # la tienda
+terraform output admin_url    # el panel (usuario: admin)
+```
+
+### Verificar que todo está bien
+
+```bash
+# Estado de los 6 servicios (tiene que decir 1/1 en cada uno)
+aws ecs describe-services --cluster tero-dev-cluster \
+  --services ui admin catalog carts orders checkout \
+  --query 'services[].[serviceName, runningCount, desiredCount]' --output table
+
+# Últimos eventos de un servicio (si alguno no arranca)
+aws ecs describe-services --cluster tero-dev-cluster --services <servicio> \
+  --query 'services[0].events[0:5].message' --output text
+
+# Logs de un servicio
+aws logs tail /ecs/tero-dev/<servicio> --since 10m
+```
+
+### Bajar (al terminar el día)
+
+```bash
+terraform destroy -var-file=envs/dev.tfvars
+```
+
+No se borran ECR (`infra/shared`) ni el bucket del state.
+
+## Evidencia
+
+![Los 6 servicios corriendo en ECS](../evidencia/infra/2026-11-23_ecs_6-servicios.png)
+
+![Tienda con productos](../evidencia/infra/2026-11-23_navegador_tienda-con-productos.png)
+
+![Orden creada](../evidencia/infra/2026-11-23_navegador_orden-creada.png)
+
+![Panel de admin](../evidencia/infra/2026-11-23_navegador_panel-admin.png)
+
+![Logs centralizados en CloudWatch](../evidencia/infra/2026-11-23_cloudwatch_log-groups.png)

@@ -45,3 +45,173 @@ module "ui" {
   execution_role_arn = data.aws_iam_role.lab.arn
   task_role_arn      = data.aws_iam_role.lab.arn
 }
+
+# ---------- catalog: productos (interno) ----------
+ 
+module "catalog" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "catalog"
+  image = "${local.ecr_registry}/tero/catalog:${local.image_tag}"
+ 
+  # Sus variables: las mismas que catalog tiene en el docker-compose.yml
+  environment = {
+    GIN_MODE                            = "release"
+    RETAIL_CATALOG_PERSISTENCE_PROVIDER = "postgres"
+    RETAIL_CATALOG_PERSISTENCE_ENDPOINT = module.database.endpoint
+    RETAIL_CATALOG_PERSISTENCE_DB_NAME  = "catalogdb"
+    RETAIL_CATALOG_PERSISTENCE_USER     = module.database.username
+  }
+ 
+  # La contraseña de la base se lee de Secrets Manager al arrancar
+  secrets = {
+    RETAIL_CATALOG_PERSISTENCE_PASSWORD = "${module.database.master_secret_arn}:password::"
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["catalog"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
+
+# ---------- carts: carrito (interno) ----------
+ 
+module "carts" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr (el repositorio se llama carts, aunque la carpeta del código es src/cart)
+  name  = "carts"
+  image = "${local.ecr_registry}/tero/carts:${local.image_tag}"
+ 
+  # Sus variables: las mismas que carts tiene en el docker-compose.yml
+  environment = {
+    CART_PERSISTENCE_PROVIDER = "postgres"
+    CART_POSTGRES_HOST        = module.database.address
+    CART_POSTGRES_PORT        = tostring(module.database.port)
+    CART_POSTGRES_DB          = "cartdb"
+    CART_POSTGRES_USER        = module.database.username
+    PORT                      = "8080"
+  }
+ 
+  # La contraseña de la base se lee de Secrets Manager al arrancar
+  secrets = {
+    CART_POSTGRES_PASSWORD = "${module.database.master_secret_arn}:password::"
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["carts"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
+
+# ---------- orders: órdenes de compra (interno) ----------
+ 
+module "orders" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "orders"
+  image = "${local.ecr_registry}/tero/orders:${local.image_tag}"
+ 
+  # Sus variables: las mismas que orders tiene en el docker-compose.yml
+  environment = {
+    GIN_MODE                           = "release"
+    RETAIL_ORDERS_PERSISTENCE_ENDPOINT = module.database.endpoint
+    RETAIL_ORDERS_PERSISTENCE_NAME     = "orders"
+    RETAIL_ORDERS_PERSISTENCE_USERNAME = module.database.username
+  }
+ 
+  # La contraseña de la base se lee de Secrets Manager al arrancar
+  secrets = {
+    RETAIL_ORDERS_PERSISTENCE_PASSWORD = "${module.database.master_secret_arn}:password::"
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["orders"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
+
+# ---------- checkout: proceso de compra (interno) ----------
+# Usa Redis (no la base) y llama a orders para crear la orden
+ 
+module "checkout" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "checkout"
+  image = "${local.ecr_registry}/tero/checkout:${local.image_tag}"
+ 
+  # Sus variables: las mismas que checkout tiene en el docker-compose.yml
+  environment = {
+    RETAIL_CHECKOUT_PERSISTENCE_PROVIDER  = "redis"
+    RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL = module.cache.url
+    RETAIL_CHECKOUT_ENDPOINTS_ORDERS      = module.internal_alb.url
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["checkout"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
+
+# ---------- admin: panel de administración (público, en /admin) ----------
+ 
+module "admin" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "admin"
+  image = "${local.ecr_registry}/tero/admin:${local.image_tag}"
+ 
+  # Sus variables: las mismas que admin tiene en el docker-compose.yml
+  environment = {
+    DB_HOST        = module.database.address
+    DB_PORT        = tostring(module.database.port)
+    DB_USER        = module.database.username
+    ADMIN_USERNAME = "admin"
+  }
+ 
+  # Tres secretos: la contraseña de la base y los dos del panel
+  secrets = {
+    DB_PASSWORD      = "${module.database.master_secret_arn}:password::"
+    ADMIN_PASSWORD   = "${module.secrets.admin_secret_arn}:ADMIN_PASSWORD::"
+    ADMIN_JWT_SECRET = "${module.secrets.admin_secret_arn}:ADMIN_JWT_SECRET::"
+  }
+ 
+  # Es pública: se anota en el ALB público (regla /admin, /admin/*, /auth/*)
+  target_group_arn = module.alb.admin_target_group_arn
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
