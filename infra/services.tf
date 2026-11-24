@@ -80,3 +80,39 @@ module "catalog" {
   execution_role_arn = data.aws_iam_role.lab.arn
   task_role_arn      = data.aws_iam_role.lab.arn
 }
+
+# ---------- carts: carrito (interno) ----------
+ 
+module "carts" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr (el repositorio se llama carts, aunque la carpeta del código es src/cart)
+  name  = "carts"
+  image = "${local.ecr_registry}/tero/carts:${local.image_tag}"
+ 
+  # Sus variables: las mismas que carts tiene en el docker-compose.yml
+  environment = {
+    CART_PERSISTENCE_PROVIDER = "postgres"
+    CART_POSTGRES_HOST        = module.database.address
+    CART_POSTGRES_PORT        = tostring(module.database.port)
+    CART_POSTGRES_DB          = "cartdb"
+    CART_POSTGRES_USER        = module.database.username
+    PORT                      = "8080"
+  }
+ 
+  # La contraseña de la base se lee de Secrets Manager al arrancar
+  secrets = {
+    CART_POSTGRES_PASSWORD = "${module.database.master_secret_arn}:password::"
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["carts"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
