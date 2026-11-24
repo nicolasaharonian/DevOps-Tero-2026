@@ -116,3 +116,37 @@ module "carts" {
   execution_role_arn = data.aws_iam_role.lab.arn
   task_role_arn      = data.aws_iam_role.lab.arn
 }
+
+# ---------- orders: órdenes de compra (interno) ----------
+ 
+module "orders" {
+  source = "./modules/ecs-service"
+ 
+  # Qué correr
+  name  = "orders"
+  image = "${local.ecr_registry}/tero/orders:${local.image_tag}"
+ 
+  # Sus variables: las mismas que orders tiene en el docker-compose.yml
+  environment = {
+    GIN_MODE                           = "release"
+    RETAIL_ORDERS_PERSISTENCE_ENDPOINT = module.database.endpoint
+    RETAIL_ORDERS_PERSISTENCE_NAME     = "orders"
+    RETAIL_ORDERS_PERSISTENCE_USERNAME = module.database.username
+  }
+ 
+  # La contraseña de la base se lee de Secrets Manager al arrancar
+  secrets = {
+    RETAIL_ORDERS_PERSISTENCE_PASSWORD = "${module.database.master_secret_arn}:password::"
+  }
+ 
+  # Es interno: se anota en el ALB interno
+  target_group_arn = module.internal_alb.target_group_arns["orders"]
+ 
+  # Dónde y con qué permisos (igual en todos los servicios)
+  prefix             = local.name
+  cluster_id         = aws_ecs_cluster.this.id
+  subnet_ids         = module.network.public_subnet_ids
+  security_group_id  = module.security.ecs_sg_id
+  execution_role_arn = data.aws_iam_role.lab.arn
+  task_role_arn      = data.aws_iam_role.lab.arn
+}
