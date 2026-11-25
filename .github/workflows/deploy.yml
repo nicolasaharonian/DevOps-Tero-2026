@@ -35,6 +35,14 @@ on:
         description: "completas = colección de Newman entera; humo = solo lectura del catálogo"
         type: string
         default: completas
+    # Mínimo privilegio: el CD le pasa solo estas tres, no todos los secrets del repo.
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_SESSION_TOKEN:
+        required: true
 
 permissions:
   contents: read
@@ -217,13 +225,17 @@ jobs:
       # Queda en la página de la corrida: qué versión quedó en qué ambiente.
       - name: Resumen
         if: always()
+        # Los valores pasan por env: (no ${{ }} dentro del script) para evitar
+        # inyección de comandos, como pide Semgrep.
         env:
           APP_URL: ${{ steps.url.outputs.app_url }}
+          RESULTADO: ${{ job.status }}
+          PRUEBAS: ${{ inputs.pruebas }}
         run: |
           {
             echo "### ${AMBIENTE}: versión \`${IMAGE_TAG}\`"
             echo ""
-            echo "- Resultado del job: **${{ job.status }}**"
+            echo "- Resultado del job: **${RESULTADO}**"
             echo "- URL: ${APP_URL:-no disponible}"
-            echo "- Pruebas: ${{ inputs.pruebas }}"
+            echo "- Pruebas: ${PRUEBAS}"
           } >> "$GITHUB_STEP_SUMMARY"

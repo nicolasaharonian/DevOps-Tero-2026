@@ -167,7 +167,11 @@ jobs:
       ambiente: dev
       image_tag: ${{ needs.version.outputs.tag }}
       pruebas: completas
-    secrets: inherit
+    # Solo las 3 credenciales de AWS (no "secrets: inherit", que pasaría todos)
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   # ---------------------------------------------------------------
   # 4. Test: solo si dev quedó bien (deploy + versión correcta + Newman)
@@ -180,7 +184,11 @@ jobs:
       ambiente: test
       image_tag: ${{ needs.version.outputs.tag }}
       pruebas: completas
-    secrets: inherit
+    # Solo las 3 credenciales de AWS (no "secrets: inherit", que pasaría todos)
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
   # ---------------------------------------------------------------
   # 5. Prod: solo si test quedó bien Y alguien lo aprueba en GitHub
@@ -195,4 +203,8 @@ jobs:
       ambiente: prod
       image_tag: ${{ needs.version.outputs.tag }}
       pruebas: humo
-    secrets: inherit
+    # Solo las 3 credenciales de AWS (no "secrets: inherit", que pasaría todos)
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
