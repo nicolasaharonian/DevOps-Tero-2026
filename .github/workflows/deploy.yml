@@ -1,0 +1,229 @@
+# Despliegue de una versión de Tero en UN ambiente (issue #11)
+#
+# Es un workflow reutilizable: no corre solo, lo llama el CD (cd.yml) tres
+# veces, una por ambiente (dev, test y prod). Así los pasos del despliegue
+# están escritos una sola vez y los tres ambientes se despliegan igual.
+#
+# Qué hace:
+#   1. Verifica que el ambiente esté levantado (en el Learner Lab se destruye
+#      después de usarlo, y el CD no lo crea de cero para no generar costos).
+#   2. Corre terraform apply con image_tag = SHA corto del commit: actualiza
+#      las task definitions de los 6 servicios y ECS hace el deploy gradual.
+#   3. Espera a que los 6 servicios queden estables.
+#   4. Comprueba que los 6 servicios corren EXACTAMENTE esa versión (si el
+#      circuit breaker hizo rollback, los servicios quedan estables pero con
+#      la versión vieja: este paso lo detecta y falla).
+#   5. Prueba la tienda: Newman completo (dev y test) o una prueba de humo
+#      que solo lee el catálogo (prod, para no crear compras falsas).
+# Si cualquier paso falla, el job queda en rojo y el CD no sigue al
+# siguiente ambiente.
+
+name: Desplegar en un ambiente
+
+on:
+  workflow_call:
+    inputs:
+      ambiente:
+        description: "dev, test o prod (nombre del GitHub Environment y del workspace de Terraform)"
+        type: string
+        required: true
+      image_tag:
+        description: "Tag de las imágenes en ECR (SHA corto del commit)"
+        type: string
+        required: true
+      pruebas:
+        description: "completas = colección de Newman entera; humo = solo lectura del catálogo"
+        type: string
+        default: completas
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.14.9"
+  SERVICIOS: "ui catalog carts orders checkout admin"
+
+jobs:
+  deploy:
+    name: Desplegar ${{ inputs.image_tag }} en ${{ inputs.ambiente }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    # Un solo despliegue a la vez por ambiente (además Terraform bloquea el
+    # state en S3). No se cancela el que está corriendo: cortar un
+    # terraform apply a medias puede dejar el ambiente inconsistente.
+    concurrency:
+      group: deploy-${{ inputs.ambiente }}
+      cancel-in-progress: false
+
+    # El GitHub Environment del ambiente. En prod tiene "required reviewers":
+    # el job queda en pausa hasta que alguien del equipo lo apruebe.
+    # La url aparece en la pestaña Deployments y en el resumen de la corrida.
+    environment:
+      name: ${{ inputs.ambiente }}
+      url: ${{ steps.url.outputs.app_url }}
+
+    env:
+      AMBIENTE: ${{ inputs.ambiente }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      CLUSTER: tero-${{ inputs.ambiente }}-cluster
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Mismas credenciales del Learner Lab que usa el job de publicación.
+      # Ojo en prod: se leen recién cuando se aprueba el job. Si el lab se
+      # reinició mientras tanto, actualizar los secrets ANTES de aprobar.
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # El CD solo ACTUALIZA un ambiente que ya existe. No lo crea de cero:
+      # crear RDS + Redis + 2 ALB lleva ~15 minutos, cuesta plata y después
+      # hay que inicializar la base a mano (init-db). Ver docs/infra/cd.md.
+      - name: Verificar que el ambiente esté levantado
+        run: |
+          ACTIVOS=$(aws ecs describe-clusters --clusters "$CLUSTER" \
+            --query 'length(clusters[?status==`ACTIVE`])' --output text)
+          if [ "$ACTIVOS" != "1" ]; then
+            echo "::error::El ambiente $AMBIENTE no está levantado (no existe $CLUSTER). Levantarlo con terraform apply (docs/infra/despliegue-ecs.md) y volver a correr este job con 'Re-run failed jobs'."
+            exit 1
+          fi
+          echo "El cluster $CLUSTER existe: se despliega $IMAGE_TAG"
+
+      # Misma herramienta y forma de uso que la demo de Terraform en
+      # GitHub Actions del curso (T05). terraform_wrapper: false deja la
+      # salida de "terraform output" limpia para usarla en los pasos de abajo.
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      # Cada ambiente es un workspace con su propio state en S3
+      # (la precondición de main.tf verifica que coincida con el tfvars).
+      - name: Elegir el workspace ${{ inputs.ambiente }}
+        run: terraform workspace select "$AMBIENTE"
+
+      # El plan queda en el log: se ve exactamente qué va a cambiar
+      # (normalmente, solo la imagen de las 6 task definitions).
+      - name: terraform plan
+        run: |
+          terraform plan -input=false -no-color \
+            -var-file="envs/$AMBIENTE.tfvars" \
+            -var="image_tag=$IMAGE_TAG" \
+            -out=tfplan
+
+      # Se aplica exactamente el plan de arriba, sin volver a calcularlo.
+      - name: terraform apply
+        run: terraform apply -input=false -no-color tfplan
+
+      # ECS levanta la tarea nueva junto a la vieja y apaga la vieja cuando la
+      # nueva pasa el health check del ALB. Esto espera a que los 6 terminen
+      # (el comando de AWS espera hasta 10 minutos).
+      - name: Esperar a que los 6 servicios queden estables
+        run: |
+          # shellcheck disable=SC2086 # SERVICIOS es una lista separada por espacios a propósito
+          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
+          echo "Los 6 servicios están estables"
+
+      # "Estable" no alcanza: si la versión nueva no arranca, el circuit
+      # breaker vuelve a la anterior y el servicio también queda estable.
+      # Acá se mira qué imagen corre cada servicio y se exige el tag nuevo.
+      - name: Verificar que corre la versión ${{ inputs.image_tag }}
+        run: |
+          ERRORES=0
+          for SERVICIO in $SERVICIOS; do
+            TASKDEF=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICIO" \
+              --query 'services[0].taskDefinition' --output text)
+            IMAGEN=$(aws ecs describe-task-definition --task-definition "$TASKDEF" \
+              --query 'taskDefinition.containerDefinitions[0].image' --output text)
+            if [ "${IMAGEN##*:}" = "$IMAGE_TAG" ]; then
+              echo "OK    $SERVICIO -> $IMAGEN"
+            else
+              echo "::error::$SERVICIO corre $IMAGEN y se esperaba el tag $IMAGE_TAG (¿rollback del circuit breaker?)"
+              ERRORES=1
+            fi
+          done
+          exit "$ERRORES"
+
+      - name: Obtener la URL de la tienda
+        id: url
+        run: echo "app_url=$(terraform output -raw app_url)" >> "$GITHUB_OUTPUT"
+
+      # Por las dudas el ALB tarda unos segundos más que ECS en dar tráfico.
+      - name: Esperar a que la tienda responda
+        env:
+          APP_URL: ${{ steps.url.outputs.app_url }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "$APP_URL/api/catalog/products" > /dev/null; then
+              echo "La tienda responde en $APP_URL"; exit 0
+            fi
+            echo "Esperando... ($i/30)"; sleep 5
+          done
+          echo "::error::La tienda no respondió en $APP_URL"; exit 1
+
+      # Dev y test: la misma colección de Newman del CI (issue #12), ahora
+      # contra el ALB del ambiente. Recorre la compra completa.
+      - name: Pruebas de integración (Newman)
+        if: inputs.pruebas == 'completas'
+        working-directory: .
+        env:
+          APP_URL: ${{ steps.url.outputs.app_url }}
+        run: |
+          docker run --rm \
+            -v "$PWD/tests/integration":/etc/newman \
+            postman/newman:6.1.3-alpine run tero.postman_collection.json \
+            --env-var "baseUrl=$APP_URL" \
+            --reporters cli,junit \
+            --reporter-junit-export "/etc/newman/resultados/newman-$AMBIENTE.xml"
+
+      # Prod: prueba de humo de solo lectura. No se corre la colección
+      # completa porque crearía carritos y órdenes falsas en la tienda real.
+      - name: Prueba de humo (solo lectura)
+        if: inputs.pruebas == 'humo'
+        env:
+          APP_URL: ${{ steps.url.outputs.app_url }}
+        run: |
+          curl -sf "$APP_URL/" > /dev/null
+          CANTIDAD=$(curl -sf "$APP_URL/api/catalog/products" | jq 'length')
+          if [ "${CANTIDAD:-0}" -lt 1 ]; then
+            echo "::error::El catálogo de $AMBIENTE está vacío o no responde"; exit 1
+          fi
+          echo "La tienda responde y el catálogo tiene $CANTIDAD productos"
+
+      - name: Guardar reporte de Newman
+        if: always() && inputs.pruebas == 'completas'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reporte-newman-${{ inputs.ambiente }}
+          path: tests/integration/resultados/
+          if-no-files-found: ignore
+
+      # Queda en la página de la corrida: qué versión quedó en qué ambiente.
+      - name: Resumen
+        if: always()
+        env:
+          APP_URL: ${{ steps.url.outputs.app_url }}
+        run: |
+          {
+            echo "### ${AMBIENTE}: versión \`${IMAGE_TAG}\`"
+            echo ""
+            echo "- Resultado del job: **${{ job.status }}**"
+            echo "- URL: ${APP_URL:-no disponible}"
+            echo "- Pruebas: ${{ inputs.pruebas }}"
+          } >> "$GITHUB_STEP_SUMMARY"

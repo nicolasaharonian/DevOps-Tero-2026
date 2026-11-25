@@ -1,8 +1,24 @@
-# CD: publicación de imágenes en ECR (issue #10)
-# Cada vez que se mergea algo a main, construye la imagen de cada servicio,
-# la escanea con Trivy y, si no tiene vulnerabilidades graves, la sube a ECR
-# con el tag del commit (por ejemplo tero/catalog:a1b2c3d).
-# Más adelante se agregan acá los despliegues a dev, test y prod.
+# CD: publicación en ECR (issue #10) y promoción Dev -> Test -> Prod (issue #11)
+#
+# Cada vez que se mergea algo a main:
+#   1. version:     calcula el tag de esta versión = SHA corto del commit.
+#   2. publish:     construye la imagen de cada servicio, la escanea con Trivy
+#                   y, si no tiene vulnerabilidades graves, la sube a ECR
+#                   (por ejemplo tero/catalog:a1b2c3d).
+#   3. deploy-dev:  la despliega en dev y corre Newman contra dev.
+#   4. deploy-test: SOLO si dev pasó, despliega la MISMA imagen en test y
+#                   vuelve a correr Newman.
+#   5. deploy-prod: SOLO si test pasó y alguien del equipo lo aprueba
+#                   (environment prod con required reviewers), despliega la
+#                   MISMA imagen en prod y hace una prueba de humo.
+# La imagen se construye una sola vez (paso 2) y los tres ambientes usan el
+# mismo tag: "build once, promote many". Los pasos del despliegue están en
+# deploy.yml (workflow reutilizable). Ver docs/infra/cd.md.
+#
+# Los quality gates del código (build, Trivy, Gitleaks, Semgrep, SCA,
+# SonarCloud y Newman) ya corrieron en el PR: el ruleset de main los exige
+# y además exige que la rama esté al día, así que el commit que llega acá
+# es exactamente el que pasó esos controles.
 
 name: CD
 
@@ -11,12 +27,10 @@ on:
     branches: [main]
   workflow_dispatch: # permite correrlo a mano desde la pestaña Actions
 
-# Una sola ejecución a la vez sobre main. A diferencia del CI, NO se cancela
-# la ejecución en curso: no conviene cortar una publicación o un despliegue a medias.
-
-concurrency:
-  group: cd-main
-  cancel-in-progress: false
+# No hay concurrency a nivel de workflow: si lo hubiera, una corrida
+# esperando la aprobación de prod (puede ser por días) frenaría el deploy a
+# dev de los merges siguientes. El control "un deploy a la vez por ambiente"
+# está en deploy.yml.
 
 permissions:
   contents: read
@@ -25,8 +39,26 @@ env:
   AWS_REGION: us-east-1
 
 jobs:
+  # ---------------------------------------------------------------
+  # 1. La versión: un único tag para todo el recorrido
+  # ---------------------------------------------------------------
+  version:
+    name: Calcular versión
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Tag = primeros 7 caracteres del commit
+        id: tag
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------
+  # 2. Build + Trivy + push a ECR (issue #10)
+  # ---------------------------------------------------------------
   publish:
     name: Publicar ${{ matrix.repo }} en ECR
+    needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -76,9 +108,9 @@ jobs:
         env:
           REGISTRO: ${{ steps.ecr.outputs.registry }}
           SERVICIO: ${{ matrix.repo }}
+          TAG: ${{ needs.version.outputs.tag }} # el mismo tag que después se despliega
 
         run: |
-          TAG="${GITHUB_SHA::7}"                  # primeros 7 caracteres del commit
           IMAGEN="$REGISTRO/tero/$SERVICIO:$TAG"  # ej: 5642...amazonaws.com/tero/catalog:a1b2c3d
           echo "name=$IMAGEN" >> "$GITHUB_OUTPUT"
 
@@ -120,3 +152,47 @@ jobs:
           IMAGEN: ${{ steps.image.outputs.name }}
 
         run: docker push "$IMAGEN"
+
+  # ---------------------------------------------------------------
+  # 3. Dev: automático en cada merge a main
+  # needs: publish -> si alguna de las 6 imágenes no pasó Trivy o no se
+  # publicó, no se despliega nada.
+  # ---------------------------------------------------------------
+  deploy-dev:
+    name: Dev
+    needs: [version, publish]
+    if: github.ref == 'refs/heads/main' # un workflow_dispatch desde otra rama no despliega
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ambiente: dev
+      image_tag: ${{ needs.version.outputs.tag }}
+      pruebas: completas
+    secrets: inherit
+
+  # ---------------------------------------------------------------
+  # 4. Test: solo si dev quedó bien (deploy + versión correcta + Newman)
+  # ---------------------------------------------------------------
+  deploy-test:
+    name: Test
+    needs: [version, deploy-dev]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ambiente: test
+      image_tag: ${{ needs.version.outputs.tag }}
+      pruebas: completas
+    secrets: inherit
+
+  # ---------------------------------------------------------------
+  # 5. Prod: solo si test quedó bien Y alguien lo aprueba en GitHub
+  # (el environment prod tiene required reviewers). Prueba de humo de
+  # solo lectura para no crear compras falsas en la tienda real.
+  # ---------------------------------------------------------------
+  deploy-prod:
+    name: Prod
+    needs: [version, deploy-test]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ambiente: prod
+      image_tag: ${{ needs.version.outputs.tag }}
+      pruebas: humo
+    secrets: inherit
