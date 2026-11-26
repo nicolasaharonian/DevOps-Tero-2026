@@ -114,7 +114,29 @@ jobs:
           IMAGEN="$REGISTRO/tero/$SERVICIO:$TAG"  # ej: 5642...amazonaws.com/tero/catalog:a1b2c3d
           echo "name=$IMAGEN" >> "$GITHUB_OUTPUT"
 
+      # Los tags de ECR son inmutables: si esta versión ya se publicó (por
+      # ejemplo en un intento anterior de esta misma corrida), no se puede
+      # volver a subir. En ese caso se saltean build, Trivy y push: la imagen
+      # que está en ECR ya pasó Trivy cuando se publicó. Así "Re-run failed
+      # jobs" funciona y el CD sigue a Dev con la misma imagen.
+      - name: ¿Ya está publicada esta versión?
+        id: existe
+
+        env:
+          SERVICIO: ${{ matrix.repo }}
+          TAG: ${{ needs.version.outputs.tag }}
+
+        run: |
+          if aws ecr describe-images --repository-name "tero/$SERVICIO" \
+               --image-ids imageTag="$TAG" > /dev/null 2>&1; then
+            echo "tero/$SERVICIO:$TAG ya está en ECR: no se vuelve a publicar"
+            echo "publicada=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publicada=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Construir imagen
+        if: steps.existe.outputs.publicada != 'true'
 
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
 
@@ -129,6 +151,7 @@ jobs:
       # el job falla acá y la imagen NO se publica.
 
       - name: Escanear imagen con Trivy
+        if: steps.existe.outputs.publicada != 'true'
 
         env:
           IMAGEN: ${{ steps.image.outputs.name }}
@@ -147,6 +170,7 @@ jobs:
               "$IMAGEN"
 
       - name: Publicar en ECR
+        if: steps.existe.outputs.publicada != 'true'
 
         env:
           IMAGEN: ${{ steps.image.outputs.name }}
