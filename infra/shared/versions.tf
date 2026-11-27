@@ -1,4 +1,5 @@
-# Raíz COMPARTIDA: recursos que existen una sola vez para todos los ambientes (ECR).
+# Raíz COMPARTIDA: recursos que existen una sola vez para todos los ambientes
+# (ECR y notificaciones).
 # No usa workspaces: siempre se trabaja en el workspace "default".
 
 terraform {
@@ -8,6 +9,11 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 6.0"
+    }
+    # Empaqueta el código de la Lambda de notificaciones en un zip
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7"
     }
   }
 

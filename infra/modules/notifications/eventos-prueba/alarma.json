@@ -1,0 +1,19 @@
+{
+  "AlarmName": "tero-dev-prueba-notificaciones",
+  "AlarmDescription": "Alarma de prueba del issue #23",
+  "AWSAccountId": "000000000000",
+  "NewStateValue": "ALARM",
+  "NewStateReason": "Prueba manual: se publicó este mensaje en el topic con aws sns publish",
+  "StateChangeTime": "2026-11-25T23:00:00.000+0000",
+  "Region": "US East (N. Virginia)",
+  "OldStateValue": "OK",
+  "Trigger": {
+    "MetricName": "HTTPCode_Target_5XX_Count",
+    "Namespace": "AWS/ApplicationELB",
+    "Statistic": "SUM",
+    "Period": 60,
+    "EvaluationPeriods": 1,
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Threshold": 5.0
+  }
+}
