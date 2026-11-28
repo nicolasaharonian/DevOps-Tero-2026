@@ -113,3 +113,15 @@ output "init_db_command" {
     ])}}",
   ])
 }
+
+# ---------- Observabilidad ----------
+
+output "dashboard_url" {
+  description = "Link al dashboard de CloudWatch del ambiente."
+  value       = module.observability.dashboard_url
+}
+
+output "alarm_names" {
+  description = "Alarmas de CloudWatch del ambiente (avisan por mail vía tero-alertas)."
+  value       = module.observability.alarm_names
+}
