@@ -134,7 +134,7 @@ porque todavía no tienen parche: es la "segunda capa".
 
 | Mail | Qué hacer |
 | ---- | --------- |
-| `[ALARM] ...` | Abrir el link de la alarma, mirar la métrica y seguir el runbook de esa alarma (issue #25). |
+| `[ALARM] ...` | Abrir el link de la alarma, mirar la métrica y seguir el runbook de esa alarma ([observabilidad.md](observabilidad.md#procedimientos-de-respuesta-runbooks)). |
 | `[OK] ...` | Se resolvió sola o por la acción que se tomó. Dejar registro si hubo impacto. |
 | `[ECR] Vulnerabilidades en ...` | Abrir el link de ECR y ver los CVE. Si tienen parche, actualizar la imagen base o la dependencia y volver a publicar. Si no lo tienen, evaluar el riesgo antes de promover la imagen a test o prod. |
 | No llegan mails | 1) `aws logs tail /aws/lambda/tero-notificaciones`: si dice "Publicado en el topic de mail", la Lambda anduvo. 2) Ver si la suscripción está en `PendingConfirmation`. 3) Buscar en la carpeta de spam. |

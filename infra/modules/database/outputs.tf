@@ -27,3 +27,8 @@ output "master_secret_arn" {
   description = "ARN del secreto con el usuario y la contraseña de la base. Claves: username, password."
   value       = aws_secretsmanager_secret.master.arn
 }
+
+output "identifier" {
+  description = "Nombre de la instancia RDS (por ejemplo, tero-dev-db). CloudWatch lo usa para las métricas de la base."
+  value       = aws_db_instance.this.identifier
+}
