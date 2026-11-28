@@ -43,7 +43,7 @@ workspaces y guarda su estado en `tero/shared.tfstate` (mismo bucket que el rest
 | Raíz            | Workspaces          | State                                    | Contenido                                           |
 | --------------- | ------------------- | ---------------------------------------- | --------------------------------------------------- |
 | `infra/`        | dev, test, prod     | `env:/<ambiente>/tero/terraform.tfstate` | Recursos por ambiente (red, y luego ECS, RDS, etc.) |
-| `infra/shared/` | ninguno (`default`) | `tero/shared.tfstate`                    | Recursos compartidos (ECR)                          |
+| `infra/shared/` | ninguno (`default`) | `tero/shared.tfstate`                    | Recursos compartidos (ECR, notificaciones)          |
 
 ## Uso
 

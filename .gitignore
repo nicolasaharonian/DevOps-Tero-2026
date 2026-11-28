@@ -3,6 +3,11 @@
 
 # Terraform
 **/.terraform/*
+# Zip de la Lambda de notificaciones (lo arma terraform en cada plan)
+infra/modules/notifications/build/
+__pycache__/
+# Mails del equipo para las notificaciones (repo público: no se suben)
+infra/shared/terraform.tfvars
 *.tfstate
 *.tfstate.*
 *.tfplan

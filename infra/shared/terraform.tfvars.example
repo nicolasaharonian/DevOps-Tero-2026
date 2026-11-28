@@ -1,0 +1,7 @@
+# Copiar este archivo como terraform.tfvars (no se sube al repo: tiene mails
+# personales y el repositorio es público) y poner los mails del equipo.
+# Terraform lo lee solo al hacer plan/apply en esta carpeta.
+alert_emails = [
+  "persona1@ejemplo.com",
+  "persona2@ejemplo.com",
+]
